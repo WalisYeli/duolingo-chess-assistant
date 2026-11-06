@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+
+# Stockfish 引擎 (约 100MB, 超过 GitHub 单文件上限, 且需单独下载)
+engine/
+
+# 安装包
+pyinst/
+
+# 本机校准 / 学习产物 (每台电脑、每个屏幕都不同)
+board.json
+templates.npz
+gui_settings.json
+board_preview.png
+learn_board.png
+check.png
+
+# 调试文件
+_dbg.py
+_dbg_cells.png
+_live.png
+
+# 对局棋谱 (自动模式会据此学习, 属于个人数据)
+games/*
+!games/.gitkeep
