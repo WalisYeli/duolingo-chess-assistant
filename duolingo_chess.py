@@ -58,9 +58,9 @@ DRAW_BUDGET = 40   # 每局累计最多让出的评分 (厘兵), 用完后直接
 SIMPLIFY_MIN = -15  # 评分低于此值时不罚换子 (略劣时换子往往对我方有利)
 MIN_DEPTH = 18     # 打算偏离最优步时, 搜索深度不足就先加深再决定
 LEARN_LOSS = 30    # 从历史棋谱学习: 对手某步估算损失 >= 此值, 就记下通向它的我方着法
-FLAT_MOVES = 6     # 连续这么多步所有候选都接近 0.00 (死和局), 之后每步只搜 FLAT_TIME 秒
+FLAT_MOVES = 6     # 连续这么多步最优评分都接近 0.00 (死和局), 之后每步只搜 FLAT_TIME 秒
 FLAT_TIME = 0.2
-FLAT_CP = 3        # 候选评分绝对值都不超过它才算"平"
+FLAT_CP = 3        # 最优评分绝对值不超过它才算"平"
 LOSS_BIG = 20     # 统计对手"明显失误"的阈值 (厘兵); 估算噪声约 ±10, 小于它的差异基本是噪声
 # 小开局库 (SAN): 引导进入不对称、有战斗的变例, 避免 1...e5 之类很快换成对称均势.
 # 只记录我方颜色那一侧的着法; 对手偏离书本后交给引擎.
@@ -664,16 +664,16 @@ class Bot:
         return sum(n * len(board.pieces(pt, c)) for pt, n in w.items() for c in colors)
 
     def trade_cost(self, board, pv):
-        """沿主变前三步 (我方一步 + 对方应对 + 我方回吃) 里, 只有双方都掉了非兵子力才算"换子"并扣分;
-        单方面白吃子 (对方没掉子) 不扣分."""
+        """沿主变前三步 (我方一步 + 对方应对 + 我方回吃) 里, 我方每掉一个非兵子力就扣分.
+        等价交换 (双方都掉) 和白送子 (只有我方掉) 都扣; 单方面白吃子 (只有对方掉) 不扣.
+        评分同分时, 这样会优先选不丢子的着法, 不会为了凑重复去弃车."""
         b = board.copy(stack=False)
-        me, th = (self.us,), (not self.us,)
-        my0, th0 = self.heavy_count(b, me), self.heavy_count(b, th)
+        me = (self.us,)
+        my0 = self.heavy_count(b, me)
         for m in pv[:3]:
             b.push(m)
         lost_me = max(0, my0 - self.heavy_count(b, me))
-        lost_th = max(0, th0 - self.heavy_count(b, th))
-        return min(lost_me, lost_th) * TRADE_COST
+        return lost_me * TRADE_COST
 
     def _cp(self, info):
         return info["score"].pov(self.us).score(mate_score=100000)
@@ -765,7 +765,8 @@ class Bot:
 
     @staticmethod
     def _is_flat(cands):
-        return all(abs(cp) <= FLAT_CP for cp, _, _ in cands)
+        """只看最优步: 最优评分接近 0.00 就算平 (其它候选很差也不影响, 只要最优步稳在 0.00)."""
+        return abs(cands[0][0]) <= FLAT_CP
 
     def _multipv(self, board, rm, limit):
         """MultiPV 搜索, 返回 [(评分, 首步, 主变)] (我方视角, 由强到弱), 并记录搜索深度."""
